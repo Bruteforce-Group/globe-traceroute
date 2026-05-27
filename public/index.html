@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Globe Traceroute — Real-Time Network Path</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      color: #fff;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      overflow: hidden;
+    }
+    #globe-container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    #info-panel {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 16px 20px;
+      max-width: 340px;
+      z-index: 10;
+    }
+    #info-panel h1 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #7ee787;
+      letter-spacing: 0.5px;
+    }
+    #hop-list {
+      list-style: none;
+      font-size: 11px;
+      line-height: 1.6;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    #hop-list li {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    #hop-list li:last-child { border-bottom: none; }
+    .hop-num { color: #7ee787; min-width: 24px; display: inline-block; }
+    .hop-lat { color: #ffa657; min-width: 40px; display: inline-block; text-align: right; }
+    .hop-loc { color: #79c0ff; }
+    .hop-ip { color: rgba(255,255,255,0.4); }
+    #status {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+      z-index: 10;
+    }
+    #legend {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 11px;
+      z-index: 10;
+      transition: opacity 0.3s;
+    }
+    .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    #controls {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 11px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 220px;
+      transition: opacity 0.3s;
+    }
+    #controls h2 {
+      font-size: 12px;
+      font-weight: 600;
+      color: #7ee787;
+      margin: 0;
+      letter-spacing: 0.5px;
+    }
+    .ctrl-row { display: flex; align-items: center; gap: 8px; }
+    .ctrl-row input[type="text"] {
+      flex: 1;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 11px;
+      padding: 4px 8px;
+      outline: none;
+    }
+    .ctrl-row input[type="text"]:focus { border-color: #7ee787; }
+    .ctrl-btn {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 11px;
+      padding: 4px 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .ctrl-btn:hover { background: rgba(255,255,255,0.15); }
+    .ctrl-btn.primary { border-color: #7ee787; color: #7ee787; }
+    .ctrl-btn.primary:hover { background: rgba(126,231,135,0.15); }
+    .ctrl-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .ctrl-toggle input { accent-color: #7ee787; }
+    #quality-bar {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 8px 16px;
+      font-size: 11px;
+      z-index: 10;
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      transition: opacity 0.3s;
+    }
+    .quality-metric { text-align: center; }
+    .quality-metric .value { font-weight: 700; font-size: 14px; }
+    .quality-metric .label { color: rgba(255,255,255,0.5); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    #chart-panel {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 12px 16px;
+      z-index: 10;
+      width: 340px;
+      transition: opacity 0.3s;
+    }
+    #chart-panel h2 {
+      font-size: 12px;
+      font-weight: 600;
+      color: #7ee787;
+      margin: 0 0 8px 0;
+      letter-spacing: 0.5px;
+    }
+    #latency-canvas { width: 100%; height: 120px; display: block; }
+    .hidden { opacity: 0; pointer-events: none; }
+    #shortcuts {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 10px;
+      color: rgba(255,255,255,0.4);
+      z-index: 10;
+      transition: opacity 0.3s;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="globe-container"></div>
+  <div id="info-panel">
+    <h1>TRACEROUTE PATH</h1>
+    <ul id="hop-list"></ul>
+  </div>
+  <div id="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#7ee787"></div>Hop marker</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ffa657"></div>Latency spike</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#79c0ff"></div>Destination</div>
+    <div class="legend-item"><div style="width:20px;height:2px;background:rgba(255,255,255,0.3)"></div>Data path</div>
+  </div>
+  <div id="status">Waiting for traceroute data...</div>
+
+  <div id="shortcuts">
+    R=refresh · T=toggle rotate · Z=zoom hops · 1/2/3=toggle panels · ?=help
+  </div>
+
+  <div id="quality-bar">
+    <div class="quality-metric">
+      <div class="value" id="q-loss">—</div>
+      <div class="label">Loss</div>
+    </div>
+    <div class="quality-metric">
+      <div class="value" id="q-lat">—</div>
+      <div class="label">Avg Latency</div>
+    </div>
+    <div class="quality-metric">
+      <div class="value" id="q-jitter">—</div>
+      <div class="label">Jitter</div>
+    </div>
+    <div class="quality-metric">
+      <div class="value" id="q-hops">—</div>
+      <div class="label">Hops</div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <h2>CONTROLS</h2>
+    <div class="ctrl-row">
+      <input type="text" id="target-input" value="1.1.1.1" placeholder="IP or hostname">
+      <button class="ctrl-btn primary" id="btn-refresh">Refresh</button>
+    </div>
+    <div class="ctrl-row">
+      <button class="ctrl-btn" id="btn-export-json">Export JSON</button>
+      <button class="ctrl-btn" id="btn-export-csv">Export CSV</button>
+    </div>
+    <div class="ctrl-row">
+      <label class="ctrl-toggle"><input type="checkbox" id="chk-rotate" checked> Auto-rotate</label>
+      <label class="ctrl-toggle"><input type="checkbox" id="chk-particles" checked> Particles</label>
+    </div>
+    <div class="ctrl-row">
+      <button class="ctrl-btn" id="btn-zoom">Zoom to hops</button>
+      <button class="ctrl-btn" id="btn-reset">Reset view</button>
+    </div>
+    <div class="ctrl-row">
+      <button class="ctrl-btn" id="btn-toggle-info">Toggle info</button>
+      <button class="ctrl-btn" id="btn-toggle-chart">Toggle chart</button>
+    </div>
+  </div>
+
+  <div id="chart-panel">
+    <h2>LATENCY HISTORY</h2>
+    <canvas id="latency-canvas"></canvas>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="./globe.js"></script>
+</body>
+</html>
